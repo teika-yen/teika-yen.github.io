@@ -51,7 +51,7 @@ footer{margin-top:40px;font-size:11px;color:var(--faint);text-align:center}
 const CONFIG = {
   list: Array.from({length: 100}, (_, i) => 1000000 + 100000 * i),   // 使える値段/一覧.txt と同じ
   listSha256: "b48f1b088be8e654a03f2391cbd6fd608e0ea8e70ea298a6f283f490e8e2ecbe",
-  signatureUrl: null,               // 声明の署名（Etherscan の Verified Signature）のURL
+  signatureUrl: "signature.txt",              // 声明の署名（Etherscan の Verified Signature）のURL
   rpc: "https://ethereum-rpc.publicnode.com",   // Sepolia は https://ethereum-sepolia-rpc.publicnode.com
   contract: null,                   // ERC721 の契約アドレス
   holders: [],                      // 「まだ売れていない」とみなす持ち主（作家のウォレット等）

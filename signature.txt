@@ -1,0 +1,6 @@
+Signer:    0x5b799eAA497fbB772E1b20DdCdb58351782CC0DC
+Message:   statement.txt (exact bytes, UTF-8)
+Method:    personal_sign (EIP-191)
+Signature: 0x9892723873bb76bf176c2585406a546ff0834ef21efeb6a24d7a9ef19a9cc4393fdf55a41a3b1d4c8a34f750f2afea362010fa0c6767e4dc1635e1a4396610081c
+
+Verify: https://etherscan.io/verifiedSignatures
