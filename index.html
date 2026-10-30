@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>定価 / Teika — usable prices</title>
+<meta name="robots" content="noindex">
+<style>
+:root{--bg:#fff;--fg:#111;--sub:#555;--faint:#c4c4c4;--line:#e6e6e6}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:"Hiragino Mincho ProN","Yu Mincho","Times New Roman",serif;padding:56px 16px 40px;-webkit-font-smoothing:antialiased}
+main{max-width:720px;margin:0 auto}
+.label{font-size:13px;letter-spacing:.12em;color:var(--sub);text-align:center}
+#head{font-size:clamp(44px,12vw,84px);font-weight:400;text-align:center;margin:14px 0 6px;font-variant-numeric:tabular-nums}
+#sub{text-align:center;font-size:15px;color:var(--sub);font-variant-numeric:tabular-nums;min-height:1.4em}
+#sub b{display:block;font-weight:400;color:var(--fg);font-size:22px;margin-top:6px}
+#grid{display:grid;grid-template-columns:repeat(5,1fr);gap:0;margin-top:48px;border-top:1px solid var(--line);border-left:1px solid var(--line)}
+#grid div{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:9px 4px;text-align:center;font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+#grid .live{background:var(--fg);color:var(--bg)}
+#grid .sold{color:var(--fg)}
+#grid .sold::after{content:" ●";font-size:8px;vertical-align:2px}
+#grid .gone{color:var(--faint);text-decoration:line-through}
+#grid .open{color:var(--sub)}
+#grid a{color:inherit;text-decoration:none}
+#count{margin-top:16px;display:flex;justify-content:center;gap:22px;font-size:13px;color:var(--sub);font-variant-numeric:tabular-nums;flex-wrap:wrap}
+.rule{margin-top:56px;font-size:13px;line-height:1.95;color:var(--sub)}
+.rule p+p{margin-top:14px}
+.proof{margin-top:28px;font:11px/1.7 ui-monospace,Menlo,monospace;color:var(--faint);word-break:break-all}
+footer{margin-top:40px;font-size:11px;color:var(--faint);text-align:center}
+#demo{position:fixed;top:8px;left:8px;font:11px/1.4 ui-monospace,Menlo,monospace;color:#b00;background:#fff;padding:2px 6px;border:1px solid #b00}
+@media (min-width:640px){#grid{grid-template-columns:repeat(10,1fr)}#grid div{font-size:11px;padding:10px 2px}}
+</style>
+</head>
+<body>
+<main>
+  <div class="label" id="label"></div>
+  <h1 id="head">—</h1>
+  <div id="sub"></div>
+  <div id="grid"></div>
+  <div id="count"></div>
+  <div class="rule">
+    <p>私が付ける値段は、これで全部です。どの値段も、払われるのは一度だけ。出して売れなかった値段は消えます。一覧が尽きたら、もう売りません。</p>
+    <p>These are all the prices I will ever ask. Each can be paid once. A price that is offered and not paid is gone. When the list is empty, I stop selling.</p>
+  </div>
+  <div class="proof" id="proof"></div>
+  <footer id="foot">Teika</footer>
+</main>
+<script>
+/* ===== 設定（値段を出すたびに offers に1行足す） ===== */
+const CONFIG = {
+  list: Array.from({length: 100}, (_, i) => 1000000 + 100000 * i),   // 使える値段/一覧.txt と同じ
+  listSha256: "b48f1b088be8e654a03f2391cbd6fd608e0ea8e70ea298a6f283f490e8e2ecbe",
+  signatureUrl: null,               // 声明の署名（Etherscan の Verified Signature）のURL
+  rpc: "https://ethereum-rpc.publicnode.com",   // Sepolia は https://ethereum-sepolia-rpc.publicnode.com
+  contract: null,                   // ERC721 の契約アドレス
+  holders: [],                      // 「まだ売れていない」とみなす持ち主（作家のウォレット等）
+  offers: [
+    // { price: 1000000, tokenId: 1, start: "2026-12-05T22:00:00+09:00", end: "2026-12-07T22:00:00+09:00", url: "" },
+  ],
+  pollSec: 30
+};
+/* ================================================ */
+
+const q = new URLSearchParams(location.search);
+const DEMO = q.has("demo");
+const yen = n => "¥" + n.toLocaleString("en-US");
+const pad = n => String(n).padStart(2, "0");
+const $ = id => document.getElementById(id);
+const hms = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return pad(Math.floor(s / 3600)) + ":" + pad(Math.floor(s % 3600 / 60)) + ":" + pad(s % 60); };
+
+let offers = CONFIG.offers.map(o => ({...o, startMs: Date.parse(o.start), endMs: Date.parse(o.end), sold: false}));
+let clockNow = () => Date.now();
+
+/* デモ：1回目（10点・48時間）を96秒に縮める。?demo&sold=4&order=asc|rand */
+if (DEMO) {
+  const t0 = Date.now() + 4000, dur = 48 * 3600e3, speed = dur / 96000;
+  clockNow = () => t0 + (Date.now() - t0) * speed;
+  let s = Number(q.get("seed") || 7);
+  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 5; i++) rnd();
+  const n = q.has("sold") ? Number(q.get("sold")) : 3;
+  offers = CONFIG.list.slice(0, 10).map(p => ({price: p, startMs: t0, endMs: t0 + dur, sold: false}));
+  const idx = q.get("order") === "rand" ? offers.map((_, i) => i).sort(() => rnd() - .5) : offers.map((_, i) => i);
+  const times = Array.from({length: n}, () => t0 + rnd() * dur).sort((a, b) => a - b);
+  window.__demo = idx.slice(0, n).map((i, k) => ({i, at: times[k]}));
+  // 一覧の後ろのほうに、過去に消えた値段・売れた値段がある様子は出さない（1回目なので）
+  const d = document.createElement("div"); d.id = "demo"; d.textContent = "DEMO（96秒で48時間）"; document.body.appendChild(d);
+}
+
+async function ownerOf(tokenId) {
+  const data = "0x6352211e" + BigInt(tokenId).toString(16).padStart(64, "0");
+  const r = await fetch(CONFIG.rpc, {method: "POST", headers: {"content-type": "application/json"},
+    body: JSON.stringify({jsonrpc: "2.0", id: 1, method: "eth_call", params: [{to: CONFIG.contract, data}, "latest"]})});
+  const j = await r.json();
+  if (!j.result || j.result.length < 66) throw new Error("ownerOf");
+  return "0x" + j.result.slice(-40).toLowerCase();
+}
+
+async function readChain() {
+  const keep = CONFIG.holders.map(a => a.toLowerCase());
+  const targets = offers.filter(o => o.tokenId != null);
+  if (!CONFIG.contract || !targets.length) return;
+  try {
+    const owners = await Promise.all(targets.map(o => ownerOf(o.tokenId)));
+    targets.forEach((o, i) => { o.sold = !keep.includes(owners[i]); });
+    $("foot").textContent = "Teika · read from the chain " + new Date().toLocaleTimeString("ja-JP", {hour12: false});
+  } catch (e) {
+    $("foot").textContent = "Teika · chain read failed, retrying";
+  }
+}
+
+function state(now) {
+  if (DEMO) offers.forEach((o, i) => { o.sold = window.__demo.some(x => x.i === i && x.at <= now); });
+  const byPrice = new Map(offers.map(o => [o.price, o]));
+  return CONFIG.list.map(p => {
+    const o = byPrice.get(p);
+    if (!o) return "open";
+    if (o.sold) return "sold";
+    if (now < o.startMs) return "open";
+    if (now < o.endMs) return "live";
+    return "gone";
+  });
+}
+
+function render() {
+  const now = clockNow();
+  const st = state(now);
+  const live = CONFIG.list.filter((_, i) => st[i] === "live");
+  const nSold = st.filter(x => x === "sold").length;
+  const nGone = st.filter(x => x === "gone").length;
+  const nLeft = st.filter(x => x === "open" || x === "live").length;
+
+  if (live.length) {
+    const o = offers.find(o => o.price === live[0]);
+    $("label").innerHTML = "今の定価 &nbsp;/&nbsp; THE FIXED PRICE NOW";
+    $("head").textContent = yen(live[0]);
+    $("sub").innerHTML = "消えるまで / GONE IN<b>" + hms(o.endMs - now) + "</b>";
+  } else {
+    const next = offers.filter(o => !o.sold && now < o.startMs).sort((a, b) => a.startMs - b.startMs)[0];
+    $("label").innerHTML = "残っている値段 &nbsp;/&nbsp; PRICES LEFT";
+    $("head").textContent = nLeft;
+    $("sub").innerHTML = next ? "次に出す値段まで / NEXT OFFER IN<b>" + hms(next.startMs - now) + "</b>" : (nLeft ? "" : "もう売らない / NO LONGER SELLING");
+  }
+
+  $("grid").innerHTML = CONFIG.list.map((p, i) => {
+    const o = offers.find(o => o.price === p);
+    const t = (p / 10000).toLocaleString("en-US") + "万";
+    const inner = (st[i] === "live" && o && o.url) ? `<a href="${o.url}" rel="noopener">${t}</a>` : t;
+    return `<div class="${st[i]}" title="${yen(p)}">${inner}</div>`;
+  }).join("");
+
+  $("count").innerHTML = `<span>残り ${nLeft} / ${CONFIG.list.length}</span><span>売れた ${nSold}</span><span>消えた ${nGone}</span>`;
+}
+
+$("proof").innerHTML = "list sha-256 " + CONFIG.listSha256 + (CONFIG.signatureUrl ? ` · <a href="${CONFIG.signatureUrl}" style="color:inherit">signature</a>` : "");
+render();
+setInterval(render, 250);
+if (!DEMO && CONFIG.contract) { readChain().then(render); setInterval(readChain, CONFIG.pollSec * 1000); }
+</script>
+</body>
+</html>
