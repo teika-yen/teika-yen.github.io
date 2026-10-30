@@ -1,0 +1,14 @@
+Teika
+
+These are all the prices I will ever ask.
+Each can be paid once.
+A price that is offered and not paid is gone.
+When the list is empty, I stop selling.
+
+私が付ける値段は、これで全部です。
+どの値段も、払われるのは一度だけ。
+出して売れなかった値段は消えます。
+一覧が尽きたら、もう売りません。
+
+List: 100 prices, ¥1,000,000 to ¥10,900,000
+SHA-256 of the list: b48f1b088be8e654a03f2391cbd6fd608e0ea8e70ea298a6f283f490e8e2ecbe

@@ -153,7 +153,7 @@ function render() {
   $("count").innerHTML = `<span>残り ${nLeft} / ${CONFIG.list.length}</span><span>売れた ${nSold}</span><span>消えた ${nGone}</span>`;
 }
 
-$("proof").innerHTML = "list sha-256 " + CONFIG.listSha256 + (CONFIG.signatureUrl ? ` · <a href="${CONFIG.signatureUrl}" style="color:inherit">signature</a>` : "");
+$("proof").innerHTML = "<a href=prices.txt style=color:inherit>list</a> sha-256 " + CONFIG.listSha256 + (CONFIG.signatureUrl ? ` · <a href="${CONFIG.signatureUrl}" style="color:inherit">signature</a>` : "");
 render();
 setInterval(render, 250);
 if (!DEMO && CONFIG.contract) { readChain().then(render); setInterval(readChain, CONFIG.pollSec * 1000); }
